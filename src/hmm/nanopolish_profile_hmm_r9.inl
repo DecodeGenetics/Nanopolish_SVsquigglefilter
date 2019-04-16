@@ -80,6 +80,7 @@ class ProfileHMMForwardOutputR9
         //
         inline void update_cell(uint32_t row, uint32_t col, const HMMUpdateScores& scores, float lp_emission)
         {
+            // added assertion by dorukb to make sure about the size of scores.x
             assert(sizeof(scores.x)/sizeof(float) >= HMT_NUM_MOVEMENT_TYPES);
             float sum = scores.x[0];
             for(auto i = 1; i < HMT_NUM_MOVEMENT_TYPES; ++i) {
@@ -240,12 +241,6 @@ inline std::vector<float> make_post_flanking(const HMMInputData& data,
         // base case, all events aligned but 1
         {
             uint32_t event_idx = e_start + (num_events - 1) * data.event_stride; // last event
-            // std::cout << "e_start: " << e_start << std::endl;
-            // std::cout << "(num_events - 1): " << (num_events - 1) << std::endl;
-            // //std::cout << "data.event_stride: " << data.event_stride << std::endl;
-            // //std::cout << "(num_events - 1) * data.event_stride: " << (num_events - 1) * data.event_stride << std::endl;
-            // std::cout << "event_idx: " << event_idx << std::endl;
-            // std::cout << "data.event_stop_idx: " << data.event_stop_idx << std::endl;
             assert(event_idx == data.event_stop_idx);
             post_flank[num_events - 2] = log(TRANS_START_TO_CLIP) + // transition from pre to background state
                                          log_probability_background(*data.read, event_idx, data.strand) + // emit from background

@@ -18,6 +18,10 @@
 #include <iostream>
 #include <fstream>
 
+#include <sys/stat.h>
+#include <unistd.h>
+#include <string>
+
 extern "C" {
 #include "event_detection.h"
 #include "scrappie_common.h"
@@ -40,53 +44,11 @@ int g_failed_alignment_reads = 0;
 const double MIN_CALIBRATION_VAR = 2.5;
 
 
+inline bool file_exists (const std::string& name) {
+  struct stat buffer;   
+  return (stat (name.c_str(), &buffer) == 0); 
+}
 
-
-
-
-
-// enum format { FORMAT_FASTA, FORMAT_SAM };
-// struct arguments {
-//     bool dwell_correction;
-//     enum format outformat;
-//     int limit;
-//     float min_prob;
-//     FILE * output;
-//     char * prefix;
-//     float skip_pen;
-//     float stay_pen;
-//     float local_pen;
-//     bool use_slip;
-//     int trim_start;
-//     int trim_end;
-//     int varseg_chunk;
-//     float varseg_thresh;
-//     char *dump;
-//     int compression_level;
-//     int compression_chunk_size;
-//     char **files;
-// };
-
-// static struct arguments scrappie_args = {
-//     .dwell_correction = true,
-//     .limit = 0,
-//     .min_prob = 1e-5f,
-//     .output = NULL,
-//     .prefix = "",
-//     .outformat = FORMAT_FASTA,
-//     .skip_pen = 0.0f,
-//     .stay_pen = 0.0f,
-//     .local_pen = 2.0f,
-//     .use_slip = false,
-//     .trim_start = 200,
-//     .trim_end = 10,
-//     .varseg_chunk = 100,
-//     .varseg_thresh = 0.0f,
-//     .dump = NULL,
-//     .compression_level = 1,
-//     .compression_chunk_size = 200,
-//     .files = NULL
-// };
 
 void SquiggleScalings::set4(double _shift,
                             double _scale,
@@ -126,10 +88,27 @@ SquiggleRead::SquiggleRead(const std::string& name, const ReadDB& read_db, const
 {
     this->events_per_base[0] = events_per_base[1] = 0.0f;
     this->base_model[0] = this->base_model[1] = NULL;
-    //std::cout << "read_name: " <<  this->read_name<< std::endl;
     this->fast5_path = read_db.get_signal_path(this->read_name);
-    //std::cout << "fast5 path: " <<  this->fast5_path << std::endl;
+
+    // added by dorukb. 
+    // .fast5.events is a tsv file containing the event_table info computed by Scrappie.
+    // So far, a modified version of Scrappie is run to create e new file per read containing the same fast5 name with the .events ext added.
+    // TODO: Either find a way to remove this event to basecall mapping, or write every 100th event or so to reduce IO.
+    // Reason why implemented: Based on initial tests, the event indices reported by nanopolish sometimes were off and out of the relevant locations.
+    // Adding this mapping got rid of the problem mentioned above. 
+    // TODO: Check if the problem persists, if not use nanopolish's own mapping algorithm as that will remove the need to run Scrappie.
     this->events_path = this->fast5_path + ".events";
+
+    // Hack to understand whether the .events are used and the event table is going to be read.
+    if (file_exists(this->events_path))
+    {
+        this->read_scrappie_events = true;
+    }
+    else
+    {
+         this->read_scrappie_events = false;
+    }
+
 
     #pragma omp critical(sr_load_fast5)
     {
@@ -146,14 +125,27 @@ SquiggleRead::SquiggleRead(const std::string& name, const ReadDB& read_db, const
             }
         }
 
-        // bool is_event_read = is_extract_read_name(this->read_name);
-        // if(this->nucleotide_type == SRNT_DNA && is_event_read) {
-        //     load_from_events(flags);
-        // } else {
+
+        if (!this->read_scrappie_events)
+        {
+            bool is_event_read = is_extract_read_name(this->read_name);
+            if(this->nucleotide_type == SRNT_DNA && is_event_read) {
+                load_from_events(flags);
+            } else {
+                this->read_sequence = read_db.get_read_sequence(read_name);
+                load_from_raw(flags);
+            }
+        }
+        else
+        {
             this->read_sequence = read_db.get_read_sequence(read_name);
-            //std::cout << "before loading the raw." << std::endl;
             load_from_raw(flags);
-        //}
+        }
+        
+
+
+
+
 
         delete this->f_p;
         this->f_p = nullptr;
@@ -169,6 +161,8 @@ SquiggleRead::~SquiggleRead()
 
 }
 
+// added by dorukb
+// load the Scrappie event_table
 std::vector<ScrappieEventsBasecalls> SquiggleRead::load_scrappie_events_and_basecalls(const std::string& scrappie_events_fn)
 {
     std::vector<ScrappieEventsBasecalls> scrappie_events;
@@ -196,11 +190,8 @@ std::vector<ScrappieEventsBasecalls> SquiggleRead::load_scrappie_events_and_base
             scrappie_events.push_back(seb);
         }
         line_idx++;
-        //std::cout << pos << " " << state << " " << kmer << std::endl;
-        //std::cout << seb.kmer << std::endl;
     }
     return scrappie_events;
-
 }
 
 // helper for get_closest_event_to
@@ -224,18 +215,6 @@ int SquiggleRead::get_closest_event_to(int k_idx, uint32_t strand) const
 
     int event_before = get_next_event(k_idx, stop_before, -1, strand);
     int event_after = get_next_event(k_idx, stop_after, 1, strand);
-
-
-    // #if DEBUG_PRINT_STATS
-    //     std::cout << "k_idx: " << k_idx << std::endl;
-    //     std::cout << "strand: " << strand << std::endl;
-    //     std::cout << "stop_before: " << stop_before << std::endl;
-    //     std::cout << "stop_after: " << stop_after << std::endl; 
-    //     std::cout << "event_before: " << event_before << std::endl; 
-    //     std::cout << "event_after: " << event_after << std::endl; 
-    // #endif
-
-
 
     // TODO: better selection of "best" event to return
     if(event_before == -1)
@@ -354,9 +333,7 @@ void SquiggleRead::load_from_events(const uint32_t flags)
 void SquiggleRead::load_from_raw(const uint32_t flags)
 {
     // File not in db, can't load
-    //std::cout<< "In raw load: " << std::endl;
     if(this->fast5_path == "" || this->read_sequence == "") {
-        std::cout << "fast5: " << fast5_path << std::endl;
         return;
     }
 
@@ -422,79 +399,32 @@ void SquiggleRead::load_from_raw(const uint32_t flags)
     trim_and_segment_raw(rt, trim_start, trim_end, varseg_chunk, varseg_thresh);
     event_table et = detect_events(rt, *ed_params);
 
-    //std::cout << "reading the events." << std::endl;
-    
-
-
-
     assert(rt.n > 0);
     assert(et.n > 0);
 
-
-    // //added by dorukb
-    // scrappie_matrix post = nanonet_posterior(et, scrappie_args.min_prob, true);
-    // const int nev = post->nc;
-    // const int nstate = post->nr;
-    // printf("nev: %d\n", nev);
-    // printf("nstate: %d\n", nstate);
-    // int *history_state = calloc(nev + 1, sizeof(int));
-    // float score =
-    //     decode_transducer(post, scrappie_args.stay_pen, scrappie_args.skip_pen, scrappie_args.local_pen, history_state, scrappie_args.use_slip);
-    // post = free_scrappie_matrix(post);
-    // int *pos = calloc(nev + 1, sizeof(int));
-    // char *basecall = overlapper(history_state, nev, nstate - 1, pos);
-    // const size_t basecall_len = strlen(basecall);
-    // if(NULL != history_state && NULL != pos){
-    //     // Need not explicitly guard here since directly accessing
-    //     // Factor out into separate update events function?
-    //     const int evoffset = et.start;
-    //     printf("et.start is: %d\n", evoffset);
-
-    //     for (int ev = 0; ev < nev; ev++) {
-    //         et.event[ev + evoffset].state = 1 + history_state[ev];
-    //         et.event[ev + evoffset].pos = pos[ev];
-    //     }
-
-    //     if (scrappie_args.dwell_correction) {
-    //         char *newbasecall =
-    //             homopolymer_dwell_correction(et, history_state, nstate,
-    //                                          basecall_len);
-    //         if (NULL != newbasecall) {
-    //             free(basecall);
-    //             basecall = newbasecall;
-    //             printf("NEWbasecall_len is: %d\n", strlen(newbasecall));
-    //         }
-    //     }
-    // }
-
-
-
-    //std::cout << "estimating scales?: " << std::endl;
     this->scalings[strand_idx] = estimate_scalings_using_mom(this->read_sequence,
                                                              *this->base_model[strand_idx],
                                                              et);
 
     // copy events into nanopolish's format
-
-    //std::cout << "et.n: " << et.n << std::endl;
-
     this->events[strand_idx].resize(et.n);
-    //this->basecalled_scrappie_events[strand_idx].resize(et.n);
+ 
+    // added by dorukb
     this->basecalled_scrappie_events[strand_idx] = load_scrappie_events_and_basecalls(this->events_path);
-
 
     double start_time = 0;
     for(size_t i = 0; i < et.n; ++i) {
         float length_in_seconds = et.event[i].length / this->sample_rate;
-        this->events[strand_idx][i] = { et.event[i].mean, et.event[i].stdv, start_time, length_in_seconds, logf(et.event[i].stdv) };
-        //std::cout << "pos: " << et.event[i].pos << " state: " << et.event[i].state << std::endl;
-        
+        this->events[strand_idx][i] = { et.event[i].mean, et.event[i].stdv, start_time, length_in_seconds, logf(et.event[i].stdv) };        
         start_time += length_in_seconds;
     }
 
     // If sequencing RNA, reverse the events to be 3'->5'
     if(this->nucleotide_type == SRNT_RNA) {
         std::reverse(this->events[strand_idx].begin(), this->events[strand_idx].end());
+        
+        // added by dorukb
+        // TODO: make sure it applies on RNA as well.
         std::reverse(this->basecalled_scrappie_events[strand_idx].begin(), this->basecalled_scrappie_events[strand_idx].end());
     }
 
@@ -505,12 +435,14 @@ void SquiggleRead::load_from_raw(const uint32_t flags)
     free(et.event);
 
     // align events to the basecalled read
-    //std::cout << "to banded alignment"<< std::endl;
-    //std::vector<AlignedPair> event_alignment = adaptive_banded_simple_event_align(*this, *this->base_model[strand_idx], read_sequence);
-    
+
     // algorithm modified by dorukb
+    // Reverted back from 
+    // std::vector<AlignedPair> event_alignment = adaptive_banded_simple_event_align(*this, *this->base_model[strand_idx], read_sequence);
+    // Because problem occured using adaptive_banded_simple_event_align().
+    // TODO: Perhap[s making it adaptive may fix the problem of having to use the Scrappie event index translation, therefore cut from time.
     std::vector<AlignedPair> event_alignment = banded_simple_event_align(*this, *this->base_model[strand_idx], read_sequence);
-    //std::cout << "event_alignment: " << event_alignment.size() << std::endl;
+    
     // transform alignment into the base-to-event map
     if(event_alignment.size() > 0) {
 
@@ -562,11 +494,9 @@ void SquiggleRead::load_from_raw(const uint32_t flags)
         if(!calibrated || this->scalings[strand_idx].var > MIN_CALIBRATION_VAR) {
             events[strand_idx].clear();
             g_failed_calibration_reads += 1;
-            std::cout << "QC calibration clearing" << std::endl;
         }
     } else {
         // Could not align, fail this read
-        std::cout << "Could not align, failed the read." << std::endl;
         this->events[strand_idx].clear();
         this->events_per_base[strand_idx] = 0.0f;
         g_failed_alignment_reads += 1;
@@ -575,13 +505,10 @@ void SquiggleRead::load_from_raw(const uint32_t flags)
 
     // Filter poor quality reads that have too many "stays"
     if(!this->events[strand_idx].empty() && this->events_per_base[strand_idx] > 5.0) {
-        std::cout << "Filter poor quality reads that have too many stays" << std::endl;
         g_qc_fail_reads += 1;
         events[0].clear();
         events[1].clear();
     }
-
-    
 }
 
 void SquiggleRead::_load_R7(uint32_t si)

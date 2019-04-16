@@ -27,23 +27,6 @@ class AlignmentDB;
 
 
 
-
-
-
-
-// void regex_split(const std::string &s, std::string delim, std::vector <std::string> &elems)
-// {
-//  regex re(delim);
-//  //string s = "The White Rabbit,  is very,late.";
-//  std::sregex_token_iterator it(s.begin(), s.end(), re, -1);
-//  std::sregex_token_iterator reg_end;
-//  for (; it != reg_end; ++it) 
-//  {
-//       std::cout << "Regex: " << it->str() << std::endl;
-//  }
-
-// }
-
 struct Variant
 {
 
@@ -80,10 +63,8 @@ struct Variant
 
 
 
-
-
-
-  static void write_vcf_header(FILE* fp,  const std::vector<std::string>& tag_lines = std::vector<std::string>());
+  static void write_vcf_header(FILE* fp,  
+                              const std::vector<std::string>& tag_lines = std::vector<std::string>());
 
   static std::string make_vcf_tag_string(const std::string& tag,
                       const std::string& id,

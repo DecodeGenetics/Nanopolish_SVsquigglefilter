@@ -72,6 +72,10 @@ class Haplotype
         //added by dorukb
         bool truncate_seq_from_left_end(int bp);
 
+        //added by dorukb
+        bool truncate_seq(int bp, bool isLeftEnd);
+
+
 
     private:
         

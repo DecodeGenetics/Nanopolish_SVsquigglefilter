@@ -769,8 +769,7 @@ double score_haplotype_for_record(Haplotype a_haplotype,
     return(score);
 }
 
-
-//modified by dorukb --remove the modifications if possible. 
+//
 Variant score_variant_thresholded(const Variant& input_variant,
                                   Haplotype base_haplotype, 
                                   const std::vector<HMMInputData>& input,
@@ -780,62 +779,30 @@ Variant score_variant_thresholded(const Variant& input_variant,
 {
 
     Variant out_variant = input_variant;
-   
+
     Haplotype variant_haplotype = base_haplotype;
     variant_haplotype.apply_variant(input_variant);
 
     // Make methylated versions of each input sequence
-    //std::vector<HMMInputSequence> base_sequences = generate_methylated_alternatives(base_haplotype.get_sequence(), methylation_types);
-    //std::vector<HMMInputSequence> variant_sequences = generate_methylated_alternatives(variant_haplotype.get_sequence(), methylation_types);
+    std::vector<HMMInputSequence> base_sequences = generate_methylated_alternatives(base_haplotype.get_sequence(), methylation_types);
+    std::vector<HMMInputSequence> variant_sequences = generate_methylated_alternatives(variant_haplotype.get_sequence(), methylation_types);
     
-  
-    //double hack_base_score = 0;
-    std::cout << "input size: " << input.size() << std::endl;
-    double total_score = 0.0f;
+    double total_score = 0.0f; 
     #pragma omp parallel for
     for(size_t j = 0; j < input.size(); ++j) {
 
         if(fabs(total_score) < score_threshold) {
-  
+
             // Calculate scores using the base nucleotide model
-            //double b ase_score = profile_hmm_score_set(base_sequences, input[j], alignment_flags);
-            //  std::cout << "beforeee base is aligned " << std::endl;
-            // const std::string& sss = "CAGAAAACCACCAAATTCCCCTTCACTGACTTT";
+            double base_score = profile_hmm_score_set(base_sequences, input[j], alignment_flags);
+            double variant_score = profile_hmm_score_set(variant_sequences, input[j], alignment_flags);
 
-            // std::string ss = "cagaaaccaccaaattccccttcactgacttt";
-            // std::cout << "ss: " << ss << std::endl;
-            // transform(ss.begin(), ss.end(), ss.begin(), toupper);
-            //  std::cout << "ss: " << ss << std::endl;
-            std::string base_string = base_haplotype.get_sequence();
-            transform(base_string.begin(), base_string.end(), base_string.begin(), tolower);
-            //std::cout << "base_string: " << base_string << std::endl;
-            double base_score = profile_hmm_score(base_string, input[j], alignment_flags);
-            //double base_score = profile_hmm_score(base_haplotype.get_sequence(), input[j], alignment_flags);
-            // std::cout << "base is aligned? " << std::endl;
-            //double variant_score = profile_hmm_score_set(variant_sequences, input[j], alignment_flags);
-            //  std::cout << "before var is aligned" << std::endl;
-
-            std::string variant_string = variant_haplotype.get_sequence();
-            transform(variant_string.begin(), variant_string.end(), variant_string.begin(), tolower);
-            //   std::cout << "variant_string: " << variant_string << std::endl;
-            double variant_score = profile_hmm_score(variant_string, input[j], alignment_flags);
-            // std::cout << "var is aligned? " << std::endl;
-            
-            // std::cout << "BASE-SEQ: " << base_haplotype.get_sequence() << std::endl;
-            // std::cout << "VARI-SEQ: " << variant_haplotype.get_sequence()<< std::endl;
-            // std::cout << "base and variant scores: " << base_score << " and " <<  variant_score << std::endl;
- 
             #pragma omp atomic
             total_score += (variant_score - base_score);
-            //hack_base_score = base_score;
         }
     }
-  
+
     out_variant.quality = total_score;
-
-    //HACK REVERT IT BACK
-    //out_variant.quality = base_score;
-
     return out_variant;
 }
 

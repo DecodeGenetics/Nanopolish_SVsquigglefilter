@@ -386,7 +386,8 @@ std::vector<AlignedPair> banded_simple_event_align(SquiggleRead& read, const Por
     const uint8_t FROM_U = 1;
     const uint8_t FROM_L = 2;
     
-    // qc
+    // qc -- modified by dorukb from -5.0 arbitrarily down to -100 to remove this qc in order to accept all suggested reads.
+    // TODO: change it back to -5 and evaluate the effect.
     double min_average_log_emission = -100.0;
 
     // banding
@@ -411,7 +412,6 @@ std::cout << "n_events: " << n_events << std::endl;
 std::cout << "n_kmers: " << n_kmers << std::endl;
 std::cout << "events_per_kmer: " << events_per_kmer << std::endl;
 #endif
-
 
     std::vector<int> min_event_idx_by_kmer(n_kmers);
     for(size_t ki = 0; ki < n_kmers; ++ki) {
@@ -611,11 +611,10 @@ std::cout << "curr_event_idx: " << curr_event_idx << std::endl;
     if(avg_log_emission < min_average_log_emission || !spanned) {
 
         #if DEBUG_PRINT_STATS
-        std::cout << "avg_log_emission: " << avg_log_emission << std::endl;
-        std::cout << "min_average_log_emission: " << min_average_log_emission << std::endl;
-        std::cout << "spanned: " << spanned << std::endl;
+            std::cout << "avg_log_emission: " << avg_log_emission << std::endl;
+            std::cout << "min_average_log_emission: " << min_average_log_emission << std::endl;
+            std::cout << "spanned: " << spanned << std::endl;
         #endif
-
 
         failed = true;
         out.clear();

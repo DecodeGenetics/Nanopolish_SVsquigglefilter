@@ -12,9 +12,8 @@
 const size_t Haplotype::INSERTED_POSITION = std::string::npos;
 
 
-Haplotype::Haplotype()
-{
-}
+//added by dorukb
+Haplotype::Haplotype(){}
 
 Haplotype::Haplotype(const std::string& ref_name,
 					 const size_t ref_position,
@@ -23,10 +22,10 @@ Haplotype::Haplotype(const std::string& ref_name,
 						m_ref_position(ref_position),
 						m_reference(ref_sequence)
 {
+
+	// line modified by dorukb. There apparently are Ms in the reference used, and that caused problems.
+	// so just replaceing any M with an N in the reference.
 	// m_sequence = m_reference;
-
-
-	// line modified by dorukb
 	m_sequence = replace_M_with_N_in_reference(m_reference);
 	m_coordinate_map.resize(m_reference.size());
 	for(size_t i = 0; i < m_coordinate_map.size(); ++i) {
@@ -47,40 +46,33 @@ std::string Haplotype::replace_M_with_N_in_reference(const std::string& ref_sequ
 
 }
 
+// added by dorukb
 bool Haplotype::truncate_seq_from_right_end(int bp)
 {
-	if (m_sequence.length() > bp){
-		size_t derived_idx = m_sequence.length() - bp;
-		m_sequence.erase(derived_idx, bp);
 
-		// fix the coordinate map accordingly now.
-		// make a pair of iterators that bound the changed sequence
-		std::vector<size_t>::iterator fi = m_coordinate_map.begin() + derived_idx;
-		std::vector<size_t>::iterator li = fi + bp;
-
-		// erase the positions of the changed bases
-		std::vector<size_t>::iterator ii = m_coordinate_map.erase(fi, li);
-
-		// insert new positions for the alt bases with invalid indices
-		//m_coordinate_map.insert(ii, al, INSERTED_POSITION);
-
-		// sanity check
-		assert(m_coordinate_map.size() == m_sequence.size());
-		return true;
-
-	}
-	else
-	{
-		std::cout << " You are deleting more than the haplotype's length." << std::endl;
-		return false;
-	}
+	return truncate_seq(bp, false);
 }
 
-
+// added by dorukb
 bool Haplotype::truncate_seq_from_left_end(int bp)
 {
+
+	return truncate_seq(bp, true);
+}
+
+// added by dorukb
+bool Haplotype::truncate_seq(int bp, bool isLeftEnd)
+{
+
 	if (m_sequence.length() > bp){
+
+		// if left end, truncate from the start
 		size_t derived_idx = 0;
+		if (!isLeftEnd)
+		{
+			derived_idx = m_sequence.length() - bp; //if right end, truncate from the end.
+		}
+		
 		m_sequence.erase(derived_idx, bp);
 
 		// fix the coordinate map accordingly now.
@@ -91,9 +83,6 @@ bool Haplotype::truncate_seq_from_left_end(int bp)
 		// erase the positions of the changed bases
 		std::vector<size_t>::iterator ii = m_coordinate_map.erase(fi, li);
 
-		// insert new positions for the alt bases with invalid indices
-		//m_coordinate_map.insert(ii, al, INSERTED_POSITION);
-
 		// sanity check
 		assert(m_coordinate_map.size() == m_sequence.size());
 		return true;
@@ -103,13 +92,13 @@ bool Haplotype::truncate_seq_from_left_end(int bp)
 	{
 		std::cout << " You are deleting more than the haplotype's length." << std::endl;
 		return false;
-	}
+	}	
+
 }
 
 
 
-
-//       
+// modified by dorukb to support INS and DEL SV events.        
 bool Haplotype::apply_variant(const Variant& v)
 {
 	// Search the coordinate map for the reference position
@@ -127,9 +116,7 @@ bool Haplotype::apply_variant(const Variant& v)
 	size_t rl = v.ref_seq.length();
 	size_t al = v.alt_seq.length();
 
-	// std::cout << "v.var_seq (haplotype): " << v.var_seq << std::endl;
-	// std::cerr << "SV " << v.ref_position << " ALT=" << v.alt_seq << " REF="<< v.ref_seq << std::endl;
-
+	// DEL events
 	if (v.alt_seq == "<DEL>")
 	{
 		// Replace reference sequence [derived_idx ... derived_idx+rl] by [derived_idx]
@@ -139,24 +126,17 @@ bool Haplotype::apply_variant(const Variant& v)
 		m_sequence.replace(derived_idx, rl, m_sequence.substr(derived_idx, 1));
 		std::cerr << "---------- [DEL] length = " << rl << std::endl;
 	}
+
+	// INS events
 	else if (v.alt_seq == "<INS>")
 	{
-		//std::regex regex_seq_info(";SEQ=([A|C|G|T|a|c|g|t]*);");
-		//auto regex_it = std::sregex_iterator(v.info.begin(), v.info.end(), regex_seq_info);
 		std::string insertion_seq{};
-
-		//if (regex_it != std::sregex_iterator())
-		//{ // there is a match (it should be)
-			insertion_seq = m_sequence.substr(derived_idx, 1) + v.var_seq;
-			//insertion_seq = m_sequence.substr(derived_idx, 1) + ((*regex_it)[1]).str();
-		//}
-		//else
-		//   return false;
-		//insertion_seq = v.var_seq;
+		insertion_seq = m_sequence.substr(derived_idx, 1) + v.var_seq;
+		
 		rl = 1;
 		al = insertion_seq.length();
 		std::cerr << "---------- [INS] length and v.alt_length = " << al << "and" << v.alt_length << std::endl;
-		assert(al == v.alt_length); // regex should work the same when reading the variant
+		assert(al == v.alt_length);
 
 		m_sequence.replace(derived_idx, rl, insertion_seq);
 	}
@@ -174,15 +154,10 @@ bool Haplotype::apply_variant(const Variant& v)
 	// update coordinate map
 
 	// make a pair of iterators that bound the changed sequence
-	// std::cout << "m_coordinate_map.size(): " << m_coordinate_map.size() << std::endl;
-	// std::cout << "derived_idx: " << derived_idx << std::endl;
-	// std::cout << "rl: " << rl << std::endl;
-
 	std::vector<size_t>::iterator fi = m_coordinate_map.begin() + derived_idx;
 	std::vector<size_t>::iterator li = fi + rl;
 
 	// erase the positions of the changed bases
-	//assert((derived_idx+rl) < m_coordinate_map.size());
 	std::vector<size_t>::iterator ii = m_coordinate_map.erase(fi, li);
 
 	// insert new positions for the alt bases with invalid indices

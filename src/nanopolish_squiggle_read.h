@@ -58,6 +58,7 @@ struct SquiggleEvent
 };
 
 // The raw event pos and state data for a read
+// added by dorukb
 struct ScrappieEventsBasecalls
 {
     int idx;            // event index
@@ -134,7 +135,6 @@ class SquiggleRead
         //
         // Access to data
         //
-
 
         // Return the duration of the specified event for one strand
         inline float get_duration(uint32_t event_idx, uint32_t strand) const
@@ -255,12 +255,8 @@ class SquiggleRead
                                                                         const size_t k,
                                                                         const size_t strand_idx,
                                                                         const int label_shift) const;
-
+        // added by dorukb
         std::vector<ScrappieEventsBasecalls> load_scrappie_events_and_basecalls(const std::string& scrappie_events_fn);
-        // std::vector<SquigglePosAndState> get_event_pos_and_states() const 
-        // {
-        //     return event_pos_and_states;
-        // }
 
         // Sample-level access
         size_t get_sample_index_at_time(size_t sample_time) const;
@@ -285,14 +281,15 @@ class SquiggleRead
         SquiggleReadNucleotideType nucleotide_type;
         PoreType pore_type;
         std::string fast5_path;
-        std::string events_path;
+        std::string events_path; // added by dorukb
+        bool read_scrappie_events; // added by dorukb
         uint32_t read_id;
         std::string read_sequence;
 
         // one event sequence for each strand
         std::vector<SquiggleEvent> events[2];
 
-        // one event pos and state sequence for each strand
+        // one event pos and state sequence for each strand -- added by dorukb
         std::vector<ScrappieEventsBasecalls> basecalled_scrappie_events[2];
 
         // scaling parameters for each strand
