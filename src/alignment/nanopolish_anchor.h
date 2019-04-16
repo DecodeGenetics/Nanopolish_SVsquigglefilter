@@ -32,11 +32,13 @@ struct AlignedPairRefUBComp
 };
 
 
+//added by dorukb 
 struct AlignedPairReadLBComp
 {
     bool operator()(const AlignedPair& o, int v) { return o.read_pos < v; }
 };
 
+//added by dorukb 
 struct AlignedPairReadUBComp
 {
     bool operator()(int v, const AlignedPair& o) { return v < o.read_pos; }

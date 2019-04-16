@@ -123,11 +123,6 @@ class AlignmentDB
                                                          int stop_position) const;
 
         //added by dorukb
-        std::vector<HMMInputData> get_given_event_subsequences(int e1, int e2) const;
-        //added by dorukb
-        HMMInputData get_given_event_subsequences_for_record(int e1, int e2, 
-                        const SequenceAlignmentRecordInfo& seq_align_info) const;
-        //added by dorukb
         HMMInputData get_given_event_subsequences_for_record_for_events(int e1, int e2, 
                         const SequenceAlignmentRecordInfo& seq_align_info) const;
 
@@ -141,10 +136,7 @@ class AlignmentDB
         bool find_event_coords_for_given_read_coords(const SequenceAlignmentRecordInfo& sequence_record, 
                                         const int r1, const int r2, int& event_begin_idx, int& event_end_idx) const;
 
-        //added by dorukb
-        bool find_event_coords_for_given_read_coords_nanopolish(const SequenceAlignmentRecordInfo& sequence_record, 
-                                        const int r1, const int r2, int& event_begin_idx, int& event_end_idx) const;
-
+     
         std::vector<HMMInputData> get_events_aligned_to(const std::string& contig, int position) const;
 
         std::vector<Variant> get_variants_in_region(const std::string& contig,
@@ -194,13 +186,6 @@ class AlignmentDB
                                                 int start_position, int stop_position,
                                                 const std::string& sequence_bam) const;
 
-
-
-        //EventAlignmentRecord load_events_from_single_read(const SequenceAlignmentRecord& seq_record);
-        HMMInputData get_event_subsequence_for_record(const std::string& contig,
-                                                      int& start_position,
-                                                      int& stop_position, 
-                                                      const SequenceAlignmentRecordInfo& seq_align_info) const;
 
         bool find_scrappie_events_for_basecall(const SequenceAlignmentRecordInfo& sequence_record, std::vector<int>& event_indices_for_bases) const;
 

@@ -57,6 +57,8 @@ int p7_FLogsumInit(void);
 inline float
 p7_FLogsum(float a, float b)
 {
+  //modified by dorukb. a or b may take NaN values, and must be caught.
+  // For now I am throwing an exception to catch and do nothing when it occurs. 
   if (isnan(a) || isnan(b))
   {
   	throw std::runtime_error("In function 'p7_FLogsum': a or be is NaN");

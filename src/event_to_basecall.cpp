@@ -11,6 +11,24 @@
 
 
 
+char complement(char n)
+{   
+	switch(n)
+	{   
+	case 'A':
+		return 'T';
+	case 'T':
+		return 'A';
+	case 'G':
+		return 'C';
+	case 'C':
+		return 'G';
+	}   
+	assert(false);
+	return ' ';
+}  
+
+
 bool is_homopolymer(const std::string& s)
 {
 	return ( (s.find_first_not_of(s[0]) == std::string::npos) && (s[0] != 'N') ) ;
@@ -19,12 +37,6 @@ bool is_homopolymer(const std::string& s)
 
 void fill_indices_to_missed_bases(std::vector<int>& base_event_indices, int kmer_size)
 {
-
-	// for(int k = 0; k < base_event_indices.size(); k++)
-	// {
-	// 	std::cout << base_event_indices[k]<< std::endl;
-	// }
-
 
 	// first, fill the last k-1 base indices with the latest that is filled.
 	if (base_event_indices[base_event_indices.size() - kmer_size] != -1)
@@ -90,21 +102,17 @@ void fill_indices_to_missed_bases(std::vector<int>& base_event_indices, int kmer
 
 
 
-
 void get_begin_end_event_indices_for_read_region(const SequenceAlignmentRecordInfo& seq_record, const std::vector<int>& event_inds_for_bases, 
                                     const int k_mer_length, const int read_start, const int read_end, int& event_begin_idx, int& event_end_idx)
 {
     if (seq_record.rc)
     {
     	
-        //std::cout << "rc: " << (bool)seq_record.rc << std::endl;
-
         event_begin_idx = event_inds_for_bases[seq_record.sequence.length() -1 - read_start - (k_mer_length-1)];
         event_end_idx = event_inds_for_bases[seq_record.sequence.length() -1 - read_end];
     }
     else
     {
-        //std::cout << "nay" << std::endl;
         event_begin_idx = event_inds_for_bases[read_start];
         event_end_idx = event_inds_for_bases[read_end - (k_mer_length-1)];
     }
@@ -112,8 +120,6 @@ void get_begin_end_event_indices_for_read_region(const SequenceAlignmentRecordIn
     return;
 }
 
-
-  
 
 bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_indices_for_bases)
 {
@@ -130,9 +136,7 @@ bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_ind
 		
 		if( (si != C_IDX) && (sr->has_events_for_strand(si)) )
 		{
-			//std::vector<SquigglePosAndState> event_pos_and_states = sr->event_pos_and_states;
-
-			//std::cout << "basecalled event size: " << sr->basecalled_scrappie_events[si].size() << std::endl;
+			
 			auto et = sr->basecalled_scrappie_events[si];
 			int kmer_size = et[0].kmer.length();
 
@@ -140,7 +144,6 @@ bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_ind
 			unsigned int string_idx = 0;
 			int i = 0;
 			success = true;
-			//std::cout << "et.size: " << et.size() << std::endl;
 			while (i < et.size())
 			{
 				if (et[i].pos == 0)
@@ -152,13 +155,9 @@ bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_ind
 					else
 					{
 						std::cout << "first event must match " << std::endl;
-						std::cout << et[i].kmer << " is the et[i].kmer" <<  std::endl;
-						std::cout << basecall.substr(0, kmer_size) << " is the basecall.substr(0, kmer_size)" <<  std::endl;
-						//std::cout << sequence_record.read_name << " is the read name."  <<  std::endl;
-						//std::cout << sequence_record.chromosome << " is the chromosome."  <<  std::endl;
-						//std::cout << sequence_record.beginPos << " is the begin pos"  <<  std::endl;
-						std::cout <<  basecall.substr(0, 100)  <<  " IS THE seq." << std::endl;
-						//std::cout << sequence_record.sequence_len << " is the seq len"  <<  std::endl;
+						// std::cout << et[i].kmer << " is the et[i].kmer" <<  std::endl;
+						// std::cout << basecall.substr(0, kmer_size) << " is the basecall.substr(0, kmer_size)" <<  std::endl;
+						// std::cout <<  basecall.substr(0, 100)  <<  " IS THE seq." << std::endl;
 						std::abort();
 					}
 				}
@@ -183,11 +182,9 @@ bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_ind
 						int next_substr_idx =  et[i].pos + pos_missed_offset + 1;
 						
 						//if both done at the same time, event alignment is done and the world is a pretty and peaceful place.
-
 						if ( (next_substr_idx + kmer_size) > basecall.length() &&  next_event_idx >= et.size() )
 						{
 							//std::cout << "event alignment peacefully completed." << std::endl;
-
 							break;
 						}
 						else if ( !( (next_substr_idx + kmer_size) <= basecall.length() &&  next_event_idx < et.size()) )
@@ -212,31 +209,21 @@ bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_ind
 								// and assign all remaining substr to last event idx.
 								int advance = 1;
 								//std::cout << "event indices are done. but the sequence is not over." << std::endl;
-								//std::cout << "et[i].pos + advance + pos_missed_offset + kmer_size: " << et[i].pos + advance + pos_missed_offset + kmer_size << std::endl;
-								//std::cout << "basecall.length(): " << basecall.length() << std::endl;
 								while ( (et[i].pos + advance + pos_missed_offset + kmer_size) <= basecall.length() )
 								{
-									//std::cout << "et[i].pos + advance + pos_missed_offset: " << et[i].pos + advance + pos_missed_offset << std::endl;
-									//std::cout << "event_indices_for_bases.size(): " << event_indices_for_bases.size() << std::endl;
-
-									//std::cout << "event_indices_for_bases.size(): " << event_indices_for_bases << std::endl;
-
-
 									event_indices_for_bases[et[i].pos + advance + pos_missed_offset] = et[i].idx;
 									advance++;
 								}
 								break;
-
-
 							}
 							else
 							{
-								std::cout << " i: " <<  i << std::endl;
-								std::cout << " next_substr_idx: " <<  next_substr_idx << std::endl;
-								std::cout << "(next_substr_idx + kmer_size): " << (next_substr_idx + kmer_size) << std::endl;
-								std::cout << " basecall.length(): " <<  basecall.length() << std::endl;
-								std::cout << "next_event_idx: " <<  next_event_idx << std::endl;
-								std::cout << "et.size(): " <<  et.size() << std::endl;
+								// std::cout << " i: " <<  i << std::endl;
+								// std::cout << " next_substr_idx: " <<  next_substr_idx << std::endl;
+								// std::cout << "(next_substr_idx + kmer_size): " << (next_substr_idx + kmer_size) << std::endl;
+								// std::cout << " basecall.length(): " <<  basecall.length() << std::endl;
+								// std::cout << "next_event_idx: " <<  next_event_idx << std::endl;
+								// std::cout << "et.size(): " <<  et.size() << std::endl;
 								std::cout << "partially done. Error" << std::endl;
 								std::abort();
 
@@ -244,24 +231,9 @@ bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_ind
 
 						}
 						// else, keep on.
-						// std::cout << "next_event_idx: " << next_event_idx << std::endl;
-						// std::cout << "et.size(): " << et.size() << std::endl;
-
-						// std::cout << "next_substr_idx: " << next_substr_idx << std::endl;
-						// std::cout << "basecall.length(): " << basecall.length() << std::endl;
-
-
 						next_event = et[next_event_idx].kmer;
 						std::string next_substr = basecall.substr(next_substr_idx, kmer_size);
-						
-						// std::cout << "Base: " << et[i].pos + pos_missed_offset << " matches event: " << i << std::endl;
-						// std::cout << "POS: " << et[i].pos  << " and offset: " << pos_missed_offset  << std::endl;
-						// std::cout << "et[i].kmer: " << et[i].kmer << std::endl;
-						// std::cout << "next_event: " << next_event << std::endl;
-						// std::cout << "next_substr: " << next_substr << std::endl;
-						// std::cout << "curr_substr: " << basecall.substr(et[i].pos + pos_missed_offset, kmer_size) << std::endl;
-
-
+					
 						//sequence has the last homopolymer in the strech, but next event is still homopolymer.
 						if ( is_homopolymer(cur_substr) && !is_homopolymer(next_substr))
 						{
@@ -270,38 +242,30 @@ bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_ind
 							{
 								i++;
 								pos_missed_offset--;
-								//std::cout << "in while; pos, offset: " << et[i].pos << ",  " << pos_missed_offset <<std::endl;
 							}
 							if (i >= et.size() )
 							{
 								//std::cout << " not all substrings are aligned. Abort." << std::endl;
 								std::abort();
 							}
-							//std::cout << "out while, pos, offset: " << et[i].pos << ",  " << pos_missed_offset <<std::endl;
 							event_indices_for_bases[et[i].pos + pos_missed_offset] = et[i].idx;
 							
 						}
-
-
 
 
 						// event is last homopolymer in the strecth
 						// make sure to advance in the sequnce and assign the its index as much as you can.
 						else if ( is_homopolymer(et[i].kmer) && ( !is_homopolymer(next_event)) )
 						{
-							//std::cout << "IN LOOP mer: " << et[i].kmer << " and next kmer: " << next_event << std::endl;
 							// assign this event index to the homopolymer stretch in the basecalls until it ends.
 							while ( ((et[i].pos + pos_missed_offset + 1 + kmer_size) <= basecall.length() )
 								&& is_homopolymer(basecall.substr(et[i].pos + pos_missed_offset + 1, kmer_size)) )
 							{
 								pos_missed_offset++;
 								event_indices_for_bases[et[i].pos + pos_missed_offset] = et[i].idx;
-								//std::cout << "et[i].pos + pos_missed_offset: " << et[i].pos + pos_missed_offset << std::endl;
-								//std::cout << "event_indices_for_bases.size(): " << event_indices_for_bases.size() << std::endl;
 							}
 							if ((et[i].pos + pos_missed_offset + 1 + kmer_size) > basecall.length() )
 							{
-								// std::cout << "index substr: " << (et[i].pos + pos_missed_offset + 1 + kmer_size) << std::endl;
 								// std::cout << " not all events are aligned. Abort." << std::endl;
 								std::abort();
 							}
@@ -311,9 +275,9 @@ bool map_events_to_basecall(const SquiggleRead * sr, std::vector<int>& event_ind
 					else
 					{
 						
-						std::cout << "i: " << i  << " kmer: " << et[i].kmer << " pos: "<< et[i].pos 
-							<< " pos_missed_offset: " << pos_missed_offset 
-							<< " substr: " << basecall.substr(et[i].pos + pos_missed_offset, kmer_size) << std::endl;
+						// std::cout << "i: " << i  << " kmer: " << et[i].kmer << " pos: "<< et[i].pos 
+						// 	<< " pos_missed_offset: " << pos_missed_offset 
+						// 	<< " substr: " << basecall.substr(et[i].pos + pos_missed_offset, kmer_size) << std::endl;
 						std::cout << "No mismatch of events and substrings should occur. Aborting." << std::endl;
 						std::abort();
 					}

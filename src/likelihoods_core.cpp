@@ -66,9 +66,6 @@ HMMInputData get_events_and_read_coords_for_leftflank(const AlignmentDB& alignme
 	//std::cout  << " variant_leftflank_inread: " << variant_leftflank_inread << std::endl;
 	//std::cout  << " just the read's variant pos - flanking: " <<  (variant_readPos-flanking_sequence_amount) << std::endl;
 
-	//int readpos_start_for_event = std::max(read_beginPos, (variant_readPos-flanking_sequence_amount));
-	//int readpos_start_for_event = std::max(read_beginPos, variant_leftflank_inread);
-
 	//TODO This max should actually be removed.
 	readpos_start_for_event = std::max(read_beginPos, variant_leftflank_inread);
 	//std::cout << "readpos_start_for_event: " << readpos_start_for_event << std::endl;
@@ -88,7 +85,6 @@ HMMInputData get_events_and_read_coords_for_leftflank(const AlignmentDB& alignme
 	// now get the event begin and end.
 	int event_begin_idx, event_end_idx;
 	success = alignments.find_event_coords_for_given_read_coords(rec, readpos_start_for_event, readpos_end_for_event, event_begin_idx, event_end_idx);
-	//success = alignments.find_event_coords_for_given_read_coords_nanopolish(rec, readpos_start_for_event, readpos_end_for_event, event_begin_idx, event_end_idx);
 
 	if (success)
 	{
@@ -139,7 +135,6 @@ HMMInputData get_events_and_read_coords_for_rightflank(const AlignmentDB& alignm
 	// now get the event begin and end.
 	int event_begin_idx, event_end_idx;
 	success = alignments.find_event_coords_for_given_read_coords(rec, readpos_start_for_event, readpos_end_for_event, event_begin_idx, event_end_idx);
-	//success = alignments.find_event_coords_for_given_read_coords_nanopolish(rec, readpos_start_for_event, readpos_end_for_event, event_begin_idx, event_end_idx);
 
 	if (success)
 	{
@@ -165,7 +160,6 @@ Haplotype base_haplotype_for_leftflank(const AlignmentDB& alignments, const Sequ
 
 	//int ref_beginPos;
 	alignments._find_ref_pos_from_read_pos(rec.aligned_bases, readpos_start_for_event, ref_beginPos);
-	//std::cout << "ref_beginPos: " << ref_beginPos << std::endl;
 
 	is_left_flanking = true;
 	if (variant_start <= ref_beginPos)
@@ -174,14 +168,6 @@ Haplotype base_haplotype_for_leftflank(const AlignmentDB& alignments, const Sequ
 		is_left_flanking = false;
 		return Haplotype();
 	}
-
-	// int read_variantPos = 0;
-	// alignments._find_ref_pos_from_read_pos(rec.aligned_bases, readpos_start_for_event, ref_beginPos);
-
-	// get the ref end pos.
-	// std::cout << "variant_start: " << variant_start << std::endl;
-	// std::cout << "(readpos_end_for_event - variant_readPos): " << (readpos_end_for_event - variant_readPos) << std::endl;
-	// ref_endPos = variant_start + (readpos_end_for_event - variant_readPos);
 
 	ref_endPos = ref_beginPos + (readpos_end_for_event - readpos_start_for_event);
 	//std::cout << "ref_endPos: " << ref_endPos << std::endl;
@@ -195,8 +181,6 @@ Haplotype base_haplotype_for_leftflank(const AlignmentDB& alignments, const Sequ
 
 	Haplotype base_haplotype(contig, ref_beginPos, alignments.get_reference_substring(contig, ref_beginPos, ref_endPos));
 	
-	//std::cout << "base_haplotype: " << base_haplotype.get_sequence() << std::endl;
-
 	return base_haplotype;
 }
 
@@ -228,8 +212,6 @@ Haplotype base_haplotype_for_rightflank(const AlignmentDB& alignments, const Seq
 		is_right_flanking = false;
 		return Haplotype();
 	}
-
-
 
 
 	Haplotype base_haplotype(contig, ref_beginPos, alignments.get_reference_substring(contig, ref_beginPos, ref_endPos));
@@ -461,18 +443,13 @@ void right_flank_analysis(const AlignmentDB& alignments, const uint32_t& alignme
 			{	print_error_to_csv(out_fp, contig, rec, test_variant, variant_start, variant_len, flanking_sequence_amount, "RIGHT", "BEGINPOS_ERROR");
 				continue;
 			}
-
-			//std::cout << "read_beginPos: " << read_beginPos << std::endl;
 		
 			int variant_rightflank_inread = 0;
 			bool right_flank_is_valid = alignments._find_read_pos_from_ref_pos(rec.aligned_bases, (variant_start + test_variant.ref_length + flanking_sequence_amount), variant_rightflank_inread);
 
 			if (std::binary_search(test_variant.supporting_reads.begin(), test_variant.supporting_reads.end(), rec.read_name) && right_flank_is_valid)
 			{
-				//std::cout << "variant_rightflank_inread: " << variant_rightflank_inread << std::endl;
-				//std::cout << rec.read_name << std::endl;
-				//std::cout << "Read supports the SV!" << std::endl;
-				 
+			
 				// get the event sequence.
 				int variant_readPos, readpos_start_for_event, readpos_end_for_event;
 				bool successful;

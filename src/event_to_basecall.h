@@ -15,7 +15,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-
+char complement(char n);
 bool is_homopolymer(const std::string& s);
 void fill_indices_to_missed_bases(std::vector<int>& base_event_indices, int kmer_size);
 void get_begin_end_event_indices_for_read_region(const SequenceAlignmentRecordInfo& seq_record, const std::vector<int>& event_inds_for_bases, 

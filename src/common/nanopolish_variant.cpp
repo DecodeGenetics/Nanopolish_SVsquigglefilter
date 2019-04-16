@@ -713,29 +713,15 @@ double score_variant_for_record(const Variant& input_variant,
     Haplotype variant_haplotype = base_haplotype;
     variant_haplotype.apply_variant(input_variant);
 
-    // std::cout << "BASE-SEQ: " << base_haplotype.get_sequence() << std::endl;
-    // std::cout << "VARI-SEQ: " << variant_haplotype.get_sequence()<< std::endl;
-        
-    //double total_score = 0.0f;
-    //#pragma omp parallel for
-    //for(size_t j = 0; j < input.size(); ++j) {
- 
-    // Calculate scores using the base nucleotide model
-    //double base_score = profile_hmm_score_set(base_sequences, input[j], alignment_flags);
-    //  std::cout << "before base is aligned " << std::endl;
-
     std::string base_seq_upper = base_haplotype.get_sequence();
     std::string base_seq_lower = base_haplotype.get_sequence();
     transform(base_seq_upper.begin(), base_seq_upper.end(), base_seq_upper.begin(), toupper);
     transform(base_seq_lower.begin(), base_seq_lower.end(), base_seq_lower.begin(), tolower);
 
-    //const std::string sss= "GAAAACAATTTGCTGCAAACATGGAAAGC";
     base_score = profile_hmm_score(base_seq_upper, input, alignment_flags);
     double base_score_lower = profile_hmm_score(base_seq_lower, input, alignment_flags);
     ref_seq_len = base_seq_upper.length();
-    // std::cout << "base is aligned? " << std::endl;
-    //double variant_score = profile_hmm_score_set(variant_sequences, input[j], alignment_flags);
-    //  std::cout << "before var is aligned" << std::endl;
+   
     std::string alt_seq_upper = variant_haplotype.get_sequence();
     std::string alt_seq_lower = variant_haplotype.get_sequence();
     transform(alt_seq_upper.begin(), alt_seq_upper.end(), alt_seq_upper.begin(), toupper);
@@ -746,21 +732,16 @@ double score_variant_for_record(const Variant& input_variant,
     double variant_score_lower = profile_hmm_score(alt_seq_lower, input, alignment_flags);
 
 
-    //std::cout << "BASE-SEQ-UPPER: " << base_seq_upper << std::endl;
-    //std::cout << "VARI-SEQ-UPPER: " << alt_seq_upper << std::endl;
+   
     alt_seq_len = alt_seq_upper.length();
-    // std::cout << "var is aligned? " << std::endl;
     hmm_input_len = input.event_stop_idx - input.event_start_idx + 1;
     
-    //std::cout << "base and variant scores UPPERCASE: " << base_score << " and " <<  variant_score << std::endl;
-    //std::cout << "base and variant scores LOWERCASE: " << base_score_lower << " and " <<  variant_score_lower << std::endl;
-
+    
     //#pragma omp atomic
     //total_score += (variant_score - base_score);
 
     //#pragma omp atomic
     double total_score = (variant_score - base_score);
-   // }
 
     return(total_score);
 
@@ -768,9 +749,7 @@ double score_variant_for_record(const Variant& input_variant,
 }
 
 
-
-
-//added by dorukb;
+//added by dorukb
 double score_haplotype_for_record(Haplotype a_haplotype, 
                                   const HMMInputData& input,
                                   const uint32_t alignment_flags,
@@ -779,41 +758,19 @@ double score_haplotype_for_record(Haplotype a_haplotype,
                                   int& hmm_input_len)
 {
   
-
     std::string seq_upper = a_haplotype.get_sequence();
     transform(seq_upper.begin(), seq_upper.end(), seq_upper.begin(), toupper);
 
-    //const std::string sss= "GAAAACAATTTGCTGCAAACATGGAAAGC";
     double score = profile_hmm_score(seq_upper, input, alignment_flags);
-    //double score = profile_hmm_score(sss, input, alignment_flags);
 
     seq_len = seq_upper.length();
-    
-    //std::cout << "BASE-SEQ-UPPER: " << seq_upper << std::endl;
     hmm_input_len = input.event_stop_idx - input.event_start_idx + 1;
     
-    //std::cout << " score UPPERCASE: " << score << std::endl;
-
     return(score);
-
-
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-//
+//modified by dorukb --remove the modifications if possible. 
 Variant score_variant_thresholded(const Variant& input_variant,
                                   Haplotype base_haplotype, 
                                   const std::vector<HMMInputData>& input,
@@ -826,9 +783,6 @@ Variant score_variant_thresholded(const Variant& input_variant,
    
     Haplotype variant_haplotype = base_haplotype;
     variant_haplotype.apply_variant(input_variant);
-    //std::cout << "variant applied. " << std::endl;
-    //std::cout << "PRE-BASE-SEQ: " << base_haplotype.get_sequence() << std::endl;
-    //std::cout << "PRE-VARI-SEQ: " << variant_haplotype.get_sequence()<< std::endl;
 
     // Make methylated versions of each input sequence
     //std::vector<HMMInputSequence> base_sequences = generate_methylated_alternatives(base_haplotype.get_sequence(), methylation_types);

@@ -31,70 +31,12 @@ struct BamHandles
 };
 
 
-char complement(char n)
-{   
-	switch(n)
-	{   
-	case 'A':
-		return 'T';
-	case 'T':
-		return 'A';
-	case 'G':
-		return 'C';
-	case 'C':
-		return 'G';
-	}   
-	assert(false);
-	return ' ';
-}  
-
-
-BamHandles _initialize_bam_itr(const std::string& bam_filename,
-							   const std::string& contig,
-							   int start_position,
-							   int stop_position)
-{
-	BamHandles handles;
-
-	// load bam file
-	handles.bam_fh = sam_open(bam_filename.c_str(), "r");
-	assert(handles.bam_fh != NULL);
-
-	// load bam index file
-	hts_idx_t* bam_idx = sam_index_load(handles.bam_fh, bam_filename.c_str());
-	if(bam_idx == NULL) {
-		bam_index_error_exit(bam_filename);
-	}
-
-	// read the bam header to get the contig ID
-	bam_hdr_t* hdr = sam_hdr_read(handles.bam_fh);
-	handles.bam_hdr = hdr;
-
-	int contig_id = bam_name2id(hdr, contig.c_str());
-
-
-	
-	// Initialize iteration
-	handles.bam_record = bam_init1();
-	handles.itr = sam_itr_queryi(bam_idx, contig_id, start_position, stop_position);
-
-	hts_idx_destroy(bam_idx);
-	//bam_hdr_destroy(hdr);
-	return handles;
-}
-
-
-
 SequenceAlignmentRecordInfo::SequenceAlignmentRecordInfo(const bam1_t* record, const bam_hdr_t *bamHdr)
 {
 	this->read_name = bam_get_qname(record);
 	this->beginPos = record->core.pos;
 	this->endPos = bam_endpos(record) - 1;
-	//char * chrom = m_bamHdr->target_name[record->core.tid];
 	this->chromosome = bamHdr->target_name[record->core.tid];
-	//this->rc = bam_is_rev(record);
-	//uint32_t len = aln->core.l_qseq; //length of the read.
-
 	this->rc = bam_is_rev(record);
 	
 
@@ -115,228 +57,7 @@ SequenceAlignmentRecordInfo::SequenceAlignmentRecordInfo(const bam1_t* record, c
 	assert(!alignments.empty());
 	this->aligned_bases = alignments[0];
 	this->map_quality = record->core.qual;
-
-	//this->base_to_event_map = ;
-
 }
-
-
-//added by dorukb
-bool AlignmentDB::find_event_coords_for_region_for_record(const SequenceAlignmentRecordInfo& sequence_record, 
-										const int start_pos, const int stop_pos, int& event_begin_idx, int& event_end_idx)
-{
-
-	int r1 = 0, r2 = 0;
-	bool bounded = _find_by_ref_bounds(sequence_record.aligned_bases, start_pos, stop_pos, r1, r2); //r1 and r2 (read start/end updated.)
-
-	if (!bounded)
-	{
-		std::cout << "Must be bounded. Aborting." << std::endl;
-		std::abort();
-	}
-
-	// std::cout << "read start pos: " << r1 << std::endl;
-	// std::cout << "read stop pos: " << r2 << std::endl;
-	// std::cout << "sequence: " << sequence_record.sequence.substr(r1,r2-r1+1) << std::endl;
-	std::vector<int> event_inds_for_bases;
-	bool success = find_scrappie_events_for_basecall(sequence_record, event_inds_for_bases);
-
-	if (success)
-	{
-		event_begin_idx = 0;
-		event_end_idx = 0;
-		int k_mer_length = 5;
-		get_begin_end_event_indices_for_read_region(sequence_record, event_inds_for_bases, k_mer_length, r1, r2, event_begin_idx, event_end_idx);
-		return success;
-	}
-	else
-	{
-		return success;
-	}
-}
-
-
-
-//added by dorukb
-bool AlignmentDB::find_event_coords_for_given_read_coords(const SequenceAlignmentRecordInfo& sequence_record, 
-										const int r1, const int r2, int& event_begin_idx, int& event_end_idx) const
-{
-	
-	//std::cout << "sequence: " << sequence_record.sequence.substr(r1,r2-r1+1) << std::endl;
-	//std::vector<int> event_inds_for_bases = find_scrappie_events_for_basecall(sequence_record);
-	std::vector<int> event_inds_for_bases;
-	bool success = find_scrappie_events_for_basecall(sequence_record, event_inds_for_bases);
-
-	if (success)
-	{
-		event_begin_idx = 0;
-		event_end_idx = 0;
-		int k_mer_length = 5;
-		get_begin_end_event_indices_for_read_region(sequence_record, event_inds_for_bases, k_mer_length, r1, r2, event_begin_idx, event_end_idx);
-		return success;
-	}
-	else
-	{
-		return success;
-
-	}
-
-}
-
-
-// added by dorukb
-bool AlignmentDB::find_event_coords_for_given_read_coords_nanopolish(const SequenceAlignmentRecordInfo& seq_align_info, 
-										const int r1, const int r2, int& event_begin_idx, int& event_end_idx) const
-{
-
-	SquiggleRead* sr;
-	if (m_squiggle_read_map.find(seq_align_info.read_name) != m_squiggle_read_map.end())
-	{
-		//std::cout << "read is found when preparing HMMInput data." << std::endl;
-		sr = m_squiggle_read_map.at(seq_align_info.read_name);
-	}
-	else
-	{
-		std::cout << "read is NOT found when calling for preparing HMMinput data." << std::endl;
-		std::abort();
-	}
-
-
-
-	const EventAlignmentRecord& record = EventAlignmentRecord(sr, 0, seq_align_info);
-	if(record.aligned_events.empty()) {
-		std::cout << "record's aligned events is empty." << std::endl;
-		//continue;
-		std::abort();
-	}
-
-	if(!record.sr->has_events_for_strand(record.strand)) {
-		std::cout << "record doesn't have events for the strand." << std::endl;
-		//continue;
-		std::abort();
-	}
-
-	AlignedPairRefLBComp lb_comp;
-	auto start_iter = std::lower_bound(record.aligned_readpos_events.begin(), record.aligned_readpos_events.end(),
-								  r1, lb_comp);
-
-	auto stop_iter = std::lower_bound(record.aligned_readpos_events.begin(), record.aligned_readpos_events.end(),
-								 r2, lb_comp);
-
-
-	if(start_iter == record.aligned_readpos_events.end() || stop_iter == record.aligned_readpos_events.end())
-	{
-		std::cout << "iter ends are not bounded." << std::endl;
-		return false;
-	}
-
-
-
-
-	event_begin_idx = start_iter->read_pos;
-	event_end_idx = stop_iter->read_pos;
-	return true;
-
-
-}
-
-
-
-
-bool AlignmentDB::find_scrappie_events_for_basecall(const SequenceAlignmentRecordInfo& sequence_record, std::vector<int>& event_indices_for_bases) const
-{
-
-	SquiggleRead* sr;
-	if (m_squiggle_read_map.find(sequence_record.read_name) != m_squiggle_read_map.end())
-	{
-		//std::cout << "read is found in the squiggle." << std::endl;
-		sr = m_squiggle_read_map.at(sequence_record.read_name);
-	}
-	else
-	{
-		std::cout << "read is NOT found in the squiggle." << std::endl;
-		std::abort();
-	}
-
-
-	bool success = map_events_to_basecall(sr, event_indices_for_bases);
-	return success;
-
-	 
-}
-
-
-//added by dorukb
-std::vector<SequenceAlignmentRecordInfo> AlignmentDB::load_region_sequences_info(const std::string& contig, 
-												int start_position, int stop_position, 
-												const std::string& sequence_bam) const
-{
-	assert(!contig.empty());
-	assert(start_position >= 0);
-	assert(stop_position >= 0);
-
-	BamHandles handles = _initialize_bam_itr(sequence_bam, contig, start_position, stop_position);
-	//bam_hdr_t* hdr = sam_hdr_read(handles.bam_fh);
-
-
-
-	std::vector<SequenceAlignmentRecordInfo> records;
-
-	int result;
-	while((result = sam_itr_next(handles.bam_fh, handles.itr, handles.bam_record)) >= 0) {
-
-		// skip ambiguously mapped reads
-		//std::cout << "load region sequences INFO now" << std::endl;
-		if(handles.bam_record->core.qual < 1) {
-		    continue;
-		}
-
-		records.emplace_back(handles.bam_record, handles.bam_hdr);
-
-	}
-
-	// cleanup
-	sam_itr_destroy(handles.itr);
-	bam_destroy1(handles.bam_record);
-	sam_close(handles.bam_fh);
-	return records;
-}
-
-//added by dorukb
-std::vector<SequenceAlignmentRecordInfo> AlignmentDB::load_all_sequences_info(const std::string& sequence_bam)
-{
-	samFile *fp_in = hts_open(sequence_bam.c_str(),"r"); //open bam file
-	bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
-	bam1_t *aln = bam_init1(); //initialize an alignment
-
-	std::vector<SequenceAlignmentRecordInfo> records;
-	while(sam_read1(fp_in, bamHdr, aln) > 0)
-	{
-		if(aln->core.qual < 1) {
-		    continue;
-		}
-		//int32_t pos = aln->core.pos; //left most position of alignment in zero based coordianate (+1)
-		//char *chr = bamHdr->target_name[aln->core.tid] ; //contig name (chromosome)
-		//uint32_t len = aln->core.l_qseq; //length of the read.
-		records.emplace_back(aln, bamHdr);
-	}
-
-	// cleanup
-	//sam_itr_destroy(handles.itr);
-	bam_destroy1(aln);
-	sam_close(fp_in);
-	
-	return records;
-}
-
-
-
-
-
-
-
-
-
 
 
 //
@@ -369,42 +90,6 @@ SequenceAlignmentRecord::SequenceAlignmentRecord(const bam1_t* record)
 //
 // EventAlignmentRecord
 //
-EventAlignmentRecord::EventAlignmentRecord(SquiggleRead* sr,
-										   const int strand_idx,
-										   const SequenceAlignmentRecord& seq_record)
-{ 
-	this->sr = sr;
-	size_t k = this->sr->get_model_k(strand_idx);
-	size_t read_length = this->sr->read_sequence.length();
-	
-	for(size_t i = 0; i < seq_record.aligned_bases.size(); ++i) {
-		// skip positions at the boundary
-		if(seq_record.aligned_bases[i].read_pos < k) {
-			continue;
-		}
-
-		if(seq_record.aligned_bases[i].read_pos + k >= read_length) {
-			continue;
-		}
-
-		size_t kmer_pos_ref_strand = seq_record.aligned_bases[i].read_pos;
-		size_t kmer_pos_read_strand = seq_record.rc ? this->sr->flip_k_strand(kmer_pos_ref_strand, k) : kmer_pos_ref_strand;
-		size_t event_idx = this->sr->get_closest_event_to(kmer_pos_read_strand, strand_idx);
-		this->aligned_events.push_back( { seq_record.aligned_bases[i].ref_pos, (int)event_idx });
-		this->aligned_readpos_events.push_back( { seq_record.aligned_bases[i].read_pos, (int)event_idx });
-		// #if DEBUG_PRINT_STATS
-		// std::cout << "kmer_pos_ref_strand: " << kmer_pos_ref_strand << std::endl;
-		// std::cout << "kmer_pos_read_strand: " << kmer_pos_read_strand << std::endl; 
-		// std::cout << "event_idx: " << event_idx << std::endl; 
-		// #endif
-	}
-	this->rc = strand_idx == 0 ? seq_record.rc : !seq_record.rc;
-	this->strand = strand_idx;
-	this->stride = this->aligned_events.front().read_pos < this->aligned_events.back().read_pos ? 1 : -1;
-	
-	this->read_name = seq_record.read_name;
-}
-
 
 EventAlignmentRecord::EventAlignmentRecord(SquiggleRead* sr,
 										   const int strand_idx,
@@ -429,19 +114,40 @@ EventAlignmentRecord::EventAlignmentRecord(SquiggleRead* sr,
 		size_t event_idx = this->sr->get_closest_event_to(kmer_pos_read_strand, strand_idx);
 		this->aligned_events.push_back( { seq_record.aligned_bases[i].ref_pos, (int)event_idx });
 		this->aligned_readpos_events.push_back( { seq_record.aligned_bases[i].read_pos, (int)event_idx });
-		// #if DEBUG_PRINT_STATS
-		// std::cout << "kmer_pos_ref_strand: " << kmer_pos_ref_strand << std::endl;
-		// std::cout << "kmer_pos_read_strand: " << kmer_pos_read_strand << std::endl; 
-		// std::cout << "event_idx: " << event_idx << std::endl; 
-		// #endif
-
 
 	}
 	this->rc = strand_idx == 0 ? seq_record.rc : !seq_record.rc;
 	this->strand = strand_idx;
 	this->stride = this->aligned_events.front().read_pos < this->aligned_events.back().read_pos ? 1 : -1;
-	//std::cout << "STRIDE IS: " << this->stride << std::endl;
 	this->read_name = seq_record.read_name;
+}
+
+EventAlignmentRecord::EventAlignmentRecord(SquiggleRead* sr,
+                                           const int strand_idx,
+                                           const SequenceAlignmentRecord& seq_record)
+{
+    this->sr = sr;
+    size_t k = this->sr->get_model_k(strand_idx);
+    size_t read_length = this->sr->read_sequence.length();
+    
+    for(size_t i = 0; i < seq_record.aligned_bases.size(); ++i) {
+        // skip positions at the boundary
+        if(seq_record.aligned_bases[i].read_pos < k) {
+            continue;
+        }
+
+        if(seq_record.aligned_bases[i].read_pos + k >= read_length) {
+            continue;
+        }
+
+        size_t kmer_pos_ref_strand = seq_record.aligned_bases[i].read_pos;
+        size_t kmer_pos_read_strand = seq_record.rc ? this->sr->flip_k_strand(kmer_pos_ref_strand, k) : kmer_pos_ref_strand;
+        size_t event_idx = this->sr->get_closest_event_to(kmer_pos_read_strand, strand_idx);
+        this->aligned_events.push_back( { seq_record.aligned_bases[i].ref_pos, (int)event_idx });
+    }
+    this->rc = strand_idx == 0 ? seq_record.rc : !seq_record.rc;
+    this->strand = strand_idx;
+    this->stride = this->aligned_events.front().read_pos < this->aligned_events.back().read_pos ? 1 : -1;
 }
 
 
@@ -458,11 +164,6 @@ AlignmentDB::AlignmentDB(const std::string& reads_file,
 							m_sequence_bam(sequence_bam),
 							m_event_bam(event_bam)
 {   
-	// added by dorukb
-	// samFile *fp_in = hts_open(sequence_bam.c_str(),"r"); //open bam file
-	// m_bamHdr = sam_hdr_read(fp_in); //read header
-	// added by dorukb
-
 	m_read_db.load(reads_file);
 	_clear_region();
 }
@@ -531,175 +232,13 @@ std::vector<std::string> AlignmentDB::get_read_substrings(const std::string& con
 }
 
 
-//added by dorukb
-HMMInputData AlignmentDB::get_event_subsequence_for_record(const std::string& contig,
-															  int& start_position,
-															  int& stop_position, 
-															  const SequenceAlignmentRecordInfo& seq_align_info) const
-{
-	
-	bool hmm_data_ready = false;
-	HMMInputData data;
-
-
-	assert(m_region_contig == contig); 
-	assert(m_region_start <= start_position);
-	assert(m_region_end >= stop_position);
-	// std::cout << "m_region_contig: " << m_region_contig << std::endl;
-	// std::cout << "contig: " << contig << std::endl;
-
-	// std::cout << "m_region_start: " << m_region_start << std::endl;
-	// std::cout << "start_position: " << start_position << std::endl;
-
-	// std::cout << "m_region_end: " << m_region_end << std::endl;
-	// std::cout << "stop_position: " << stop_position << std::endl;
-
-	// std::cout << "m_event_records.size() = " << m_event_records.size() << std::endl;
-	for(size_t i = 0; i < m_event_records.size(); ++i) {
-		const EventAlignmentRecord& record = m_event_records[i];
-		if (record.read_name != seq_align_info.read_name)
-		{
-			continue;
-		}
-
-		if(record.aligned_events.empty()) {
-			std::cout << "record's aligned events is empty." << std::endl;
-			continue;
-		}
-
-		if(!record.sr->has_events_for_strand(record.strand)) {
-			std::cout << "record doesn't have events for the strand." << std::endl;
-			continue;
-		}
-
-		if (start_position < record.aligned_events[0].ref_pos)
-		{
-			start_position = record.aligned_events[0].ref_pos;
-		}
-		if (stop_position > record.aligned_events[record.aligned_events.size()-1].ref_pos)
-		{
-			stop_position = record.aligned_events[record.aligned_events.size()-1].ref_pos;
-		}
-		
-	
-
-		data.read = record.sr;
-		data.pore_model = record.sr->get_base_model(record.strand);
-		data.strand = record.strand;
-		data.rc = record.rc;
-		data.event_stride = record.stride;
-		
-		int e1,e2;
-		//std::cout << "record.aligned_events.size(): " << record.aligned_events.size() << std::endl;
-		bool bounded = _find_by_ref_bounds(record.aligned_events, 
-										   start_position, 
-										   stop_position,
-										   e1,
-										   e2);
-
-
-		//std::cout << "bounded is: " << bounded << std::endl;
-
-		if(bounded) {
-			double ratio = fabs(e1 - e2) / fabs(stop_position - start_position);
-			 //std::cout << "ratio is: " << ratio << std::endl;
-			 //std::cout << "MAX_EVENT_TO_BP_RATIO is: " << MAX_EVENT_TO_BP_RATIO << std::endl;
-			// Some low quality reads appear to have "stuck" states where you get 
-			// a long run of consecutive stays. They can cause an assertion in the HMM
-			// so we added this heuristic to catch these.
-			if(ratio < MAX_EVENT_TO_BP_RATIO) {
-				assert(e1 >= 0);
-				assert(e2 >= 0);
-				//std::cout << "e1 is: " << e1 << std::endl;
-				//std::cout << "e2 is: " << e2 << std::endl;
-
-				data.event_start_idx = e1;
-				data.event_stop_idx = e2;
-				//out.push_back(data);
-				hmm_data_ready = true;
-				break;
-
-			}  
-		}
-	}
-
-	if (!hmm_data_ready)
-	{
-		std::cout << "The hmm data could not have been prepared correctly. Aborting." << std::endl;
-		std::abort();
-	}
-
-	return(data);
-
-}
-
-
-
-
-
-
-
-//added by dorukb
-HMMInputData AlignmentDB::get_given_event_subsequences_for_record(int e1, int e2, 
-						const SequenceAlignmentRecordInfo& seq_align_info) const
-{
-	bool hmm_data_ready = false;
-	HMMInputData data;
-	//std::cout << "m_event_records.size() = " << m_event_records.size() << std::endl;
-	for(size_t i = 0; i < m_event_records.size(); ++i) {
-		const EventAlignmentRecord& record = m_event_records[i];
-		if(record.aligned_events.empty()) {
-			std::cout << "record's aligned events is empty." << std::endl;
-			continue;
-		}
-
-		if(!record.sr->has_events_for_strand(record.strand)) {
-			std::cout << "record doesn't have events for the strand." << std::endl;
-			continue;
-		}
-
-		data.read = record.sr;
-		data.pore_model = record.sr->get_base_model(record.strand);
-		data.strand = record.strand;
-		data.rc = record.rc;
-		data.event_stride = record.stride;
-		
-		//int e1,e2;
-		//std::cout << "record.aligned_events.size(): " << record.aligned_events.size() << std::endl;
-	  
-		assert(e1 >= 0);
-		assert(e2 >= 0);
-		//std::cout << "e1 is: " << e1 << std::endl;
-		//std::cout << "e2 is: " << e2 << std::endl;
-
-		data.event_start_idx = e1;
-		data.event_stop_idx = e2;
-		hmm_data_ready = true;
-		break;		
-		
-	}
-
-
-	if (!hmm_data_ready)
-	{
-		std::cout << "The hmm data could not have been prepared correctly. Aborting." << std::endl;
-		std::abort();
-	}
-
-	return(data);
-
-}
-
-//added by dorukb
+//added by dorukb --used in likelihoods_core.cpp
 HMMInputData AlignmentDB::get_given_event_subsequences_for_record_for_events(int e1, int e2, 
 						const SequenceAlignmentRecordInfo& seq_align_info) const
 {
 	bool hmm_data_ready = false;
 	HMMInputData data;
-	//std::cout << "m_event_records.size() = " << m_event_records.size() << std::endl;
-	//for(size_t i = 0; i < m_event_records.size(); ++i) {
-		//const EventAlignmentRecord& record = m_event_records[i];
-
+	
 		SquiggleRead* sr;
 		if (m_squiggle_read_map.find(seq_align_info.read_name) != m_squiggle_read_map.end())
 		{
@@ -711,8 +250,6 @@ HMMInputData AlignmentDB::get_given_event_subsequences_for_record_for_events(int
 			std::cout << "read is NOT found when calling for preparing HMMinput data." << std::endl;
 			std::abort();
 		}
-
-
 
 		const EventAlignmentRecord& record = EventAlignmentRecord(sr, 0, seq_align_info);
 		if(record.aligned_events.empty()) {
@@ -733,21 +270,12 @@ HMMInputData AlignmentDB::get_given_event_subsequences_for_record_for_events(int
 		data.rc = record.rc;
 		data.event_stride = record.stride;
 		
-		//int e1,e2;
-		//std::cout << "record.aligned_events.size(): " << record.aligned_events.size() << std::endl;
-	  
 		assert(e1 >= 0);
 		assert(e2 >= 0);
-		//std::cout << "e1 is: " << e1 << std::endl;
-		//std::cout << "e2 is: " << e2 << std::endl;
 
 		data.event_start_idx = e1;
 		data.event_stop_idx = e2;
 		hmm_data_ready = true;
-		//break;		
-		
-	//}
-
 
 	if (!hmm_data_ready)
 	{
@@ -760,65 +288,6 @@ HMMInputData AlignmentDB::get_given_event_subsequences_for_record_for_events(int
 }
 
 
-
-
-// added by dorukb for testing purposes.
-
-std::vector<HMMInputData> AlignmentDB::get_given_event_subsequences(int e1, int e2) const
-{
-   
-	std::vector<HMMInputData> out;
-	//std::cout << "m_event_records.size() = " << m_event_records.size() << std::endl;
-	for(size_t i = 0; i < m_event_records.size(); ++i) {
-		const EventAlignmentRecord& record = m_event_records[i];
-		if(record.aligned_events.empty()) {
-			std::cout << "record's aligned events is empty." << std::endl;
-			continue;
-		}
-
-		if(!record.sr->has_events_for_strand(record.strand)) {
-			std::cout << "record doesn't have events for the strand." << std::endl;
-			continue;
-		}
-
-		HMMInputData data;
-		data.read = record.sr;
-		data.pore_model = record.sr->get_base_model(record.strand);
-		data.strand = record.strand;
-		data.rc = record.rc;
-		data.event_stride = record.stride;
-		
-		//int e1,e2;
-		//std::cout << "record.aligned_events.size(): " << record.aligned_events.size() << std::endl;
-	  
-		assert(e1 >= 0);
-		assert(e2 >= 0);
-		//std::cout << "e1 is: " << e1 << std::endl;
-		//std::cout << "e2 is: " << e2 << std::endl;
-
-		data.event_start_idx = e1;
-		data.event_stop_idx = e2;
-		out.push_back(data);
-			
-		
-	}
-
-	return out;
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 std::vector<HMMInputData> AlignmentDB::get_event_subsequences(const std::string& contig,
 															  int start_position,
 															  int stop_position) const
@@ -826,17 +295,8 @@ std::vector<HMMInputData> AlignmentDB::get_event_subsequences(const std::string&
 	assert(m_region_contig == contig);
 	assert(m_region_start <= start_position);
 	assert(m_region_end >= stop_position);
-	// std::cout << "m_region_contig: " << m_region_contig << std::endl;
-	// std::cout << "contig: " << contig << std::endl;
-
-	// std::cout << "m_region_start: " << m_region_start << std::endl;
-	// std::cout << "start_position: " << start_position << std::endl;
-
-	// std::cout << "m_region_end: " << m_region_end << std::endl;
-	// std::cout << "stop_position: " << stop_position << std::endl;
-
+	
 	std::vector<HMMInputData> out;
-	//std::cout << "m_event_records.size() = " << m_event_records.size() << std::endl;
 	for(size_t i = 0; i < m_event_records.size(); ++i) {
 		const EventAlignmentRecord& record = m_event_records[i];
 		if(record.aligned_events.empty()) {
@@ -857,33 +317,21 @@ std::vector<HMMInputData> AlignmentDB::get_event_subsequences(const std::string&
 		data.event_stride = record.stride;
 		
 		int e1,e2;
-		//std::cout << "record.aligned_events.size(): " << record.aligned_events.size() << std::endl;
 		bool bounded = _find_by_ref_bounds(record.aligned_events, 
 										   start_position, 
 										   stop_position,
 										   e1,
 										   e2);
-		//std::cout << "bounded is: " << bounded << std::endl;
-
-		// // HARD=CODING
-		// e1 = 65360;
-		// e2 = 65319;
-
-		//  e1 = 22185;
-		// e2 = 22134;
 
 		if(bounded) {
 			double ratio = fabs(e1 - e2) / fabs(stop_position - start_position);
-			// std::cout << "ratio is: " << ratio << std::endl;
-			// std::cout << "MAX_EVENT_TO_BP_RATIO is: " << MAX_EVENT_TO_BP_RATIO << std::endl;
+		
 			// Some low quality reads appear to have "stuck" states where you get 
 			// a long run of consecutive stays. They can cause an assertion in the HMM
 			// so we added this heuristic to catch these.
 			if(ratio < MAX_EVENT_TO_BP_RATIO) {
 				assert(e1 >= 0);
 				assert(e2 >= 0);
-				// std::cout << "e1 is: " << e1 << std::endl;
-				//  std::cout << "e2 is: " << e2 << std::endl;
 
 				data.event_start_idx = e1;
 				data.event_stop_idx = e2;
@@ -891,8 +339,6 @@ std::vector<HMMInputData> AlignmentDB::get_event_subsequences(const std::string&
 			}  
 		}
 	}
-
-
 
 	return out;
 }
@@ -1043,7 +489,6 @@ std::vector<Variant> AlignmentDB::get_variants_in_region(const std::string& cont
 	return variants;
 }
 
-//modified by dorukb
 void AlignmentDB::load_region(const std::string& contig,
 							  int start_position,
 							  int stop_position)
@@ -1074,7 +519,6 @@ void AlignmentDB::load_region(const std::string& contig,
 	
 	// load base-space alignments
 	m_sequence_records = _load_sequence_by_region(m_sequence_bam);
-	//m_sequence_records_info = _load_sequence_info_by_region(m_sequence_bam);
 
 	// load event-space alignments, possibly inferred from the base-space alignments
 	if(m_event_bam.empty()) {
@@ -1094,7 +538,6 @@ void AlignmentDB::load_region(const std::string& contig,
 	free(ref_segment);
 	fai_destroy(fai);
 }
-
 
 
 //added by dorukb
@@ -1173,6 +616,178 @@ void AlignmentDB::_clear_region()
 
 
 
+//added by dorukb
+bool AlignmentDB::find_event_coords_for_region_for_record(const SequenceAlignmentRecordInfo& sequence_record, 
+										const int start_pos, const int stop_pos, int& event_begin_idx, int& event_end_idx)
+{
+
+	int r1 = 0, r2 = 0;
+	bool bounded = _find_by_ref_bounds(sequence_record.aligned_bases, start_pos, stop_pos, r1, r2); //r1 and r2 (read start/end updated.)
+
+	if (!bounded)
+	{
+		std::cout << "Must be bounded. Aborting." << std::endl;
+		std::abort();
+	}
+
+	std::vector<int> event_inds_for_bases;
+	bool success = find_scrappie_events_for_basecall(sequence_record, event_inds_for_bases);
+
+	if (success)
+	{
+		event_begin_idx = 0;
+		event_end_idx = 0;
+		int k_mer_length = 5;
+		get_begin_end_event_indices_for_read_region(sequence_record, event_inds_for_bases, k_mer_length, r1, r2, event_begin_idx, event_end_idx);
+		return success;
+	}
+	else
+	{
+		return success;
+	}
+}
+
+//added by dorukb
+bool AlignmentDB::find_event_coords_for_given_read_coords(const SequenceAlignmentRecordInfo& sequence_record, 
+										const int r1, const int r2, int& event_begin_idx, int& event_end_idx) const
+{
+	
+	std::vector<int> event_inds_for_bases;
+	bool success = find_scrappie_events_for_basecall(sequence_record, event_inds_for_bases);
+
+	if (success)
+	{
+		event_begin_idx = 0;
+		event_end_idx = 0;
+		int k_mer_length = 5;
+		get_begin_end_event_indices_for_read_region(sequence_record, event_inds_for_bases, k_mer_length, r1, r2, event_begin_idx, event_end_idx);
+		return success;
+	}
+	else
+	{
+		return success;
+
+	}
+
+}
+
+
+bool AlignmentDB::find_scrappie_events_for_basecall(const SequenceAlignmentRecordInfo& sequence_record, std::vector<int>& event_indices_for_bases) const
+{
+
+	SquiggleRead* sr;
+	if (m_squiggle_read_map.find(sequence_record.read_name) != m_squiggle_read_map.end())
+	{
+		//std::cout << "read is found in the squiggle." << std::endl;
+		sr = m_squiggle_read_map.at(sequence_record.read_name);
+	}
+	else
+	{
+		std::cout << "read is NOT found in the squiggle." << std::endl;
+		std::abort();
+	}
+
+	bool success = map_events_to_basecall(sr, event_indices_for_bases);
+	return success;
+	 
+}
+
+
+
+BamHandles _initialize_bam_itr(const std::string& bam_filename,
+							   const std::string& contig,
+							   int start_position,
+							   int stop_position)
+{
+	BamHandles handles;
+
+	// load bam file
+	handles.bam_fh = sam_open(bam_filename.c_str(), "r");
+	assert(handles.bam_fh != NULL);
+
+	// load bam index file
+	hts_idx_t* bam_idx = sam_index_load(handles.bam_fh, bam_filename.c_str());
+	if(bam_idx == NULL) {
+		bam_index_error_exit(bam_filename);
+	}
+
+	// read the bam header to get the contig ID
+	bam_hdr_t* hdr = sam_hdr_read(handles.bam_fh);
+	handles.bam_hdr = hdr;
+
+	int contig_id = bam_name2id(hdr, contig.c_str());
+
+
+	
+	// Initialize iteration
+	handles.bam_record = bam_init1();
+	handles.itr = sam_itr_queryi(bam_idx, contig_id, start_position, stop_position);
+
+	hts_idx_destroy(bam_idx);
+	//bam_hdr_destroy(hdr);
+	return handles;
+}
+
+
+//added by dorukb
+std::vector<SequenceAlignmentRecordInfo> AlignmentDB::load_region_sequences_info(const std::string& contig, 
+												int start_position, int stop_position, 
+												const std::string& sequence_bam) const
+{
+	assert(!contig.empty());
+	assert(start_position >= 0);
+	assert(stop_position >= 0);
+
+	BamHandles handles = _initialize_bam_itr(sequence_bam, contig, start_position, stop_position);
+	//bam_hdr_t* hdr = sam_hdr_read(handles.bam_fh);
+
+	std::vector<SequenceAlignmentRecordInfo> records;
+
+	int result;
+	while((result = sam_itr_next(handles.bam_fh, handles.itr, handles.bam_record)) >= 0) {
+
+		// skip ambiguously mapped reads 
+		// just remove the less than 1 Q reads for our purposes.
+		if(handles.bam_record->core.qual < 1) {
+		    continue;
+		}
+
+		records.emplace_back(handles.bam_record, handles.bam_hdr);
+
+	}
+
+	// cleanup
+	sam_itr_destroy(handles.itr);
+	bam_destroy1(handles.bam_record);
+	sam_close(handles.bam_fh);
+	return records;
+}
+
+//added by dorukb
+std::vector<SequenceAlignmentRecordInfo> AlignmentDB::load_all_sequences_info(const std::string& sequence_bam)
+{
+	samFile *fp_in = hts_open(sequence_bam.c_str(),"r"); //open bam file
+	bam_hdr_t *bamHdr = sam_hdr_read(fp_in); //read header
+	bam1_t *aln = bam_init1(); //initialize an alignment
+
+	std::vector<SequenceAlignmentRecordInfo> records;
+	while(sam_read1(fp_in, bamHdr, aln) > 0)
+	{
+		if(aln->core.qual < 1) {
+		    continue;
+		}
+		records.emplace_back(aln, bamHdr);
+	}
+
+	// cleanup
+	//sam_itr_destroy(handles.itr);
+	bam_destroy1(aln);
+	sam_close(fp_in);
+	
+	return records;
+}
+
+
 std::vector<SequenceAlignmentRecord> AlignmentDB::_load_sequence_by_region(const std::string& sequence_bam)
 {
 	assert(!m_region_contig.empty());
@@ -1186,17 +801,15 @@ std::vector<SequenceAlignmentRecord> AlignmentDB::_load_sequence_by_region(const
 	while((result = sam_itr_next(handles.bam_fh, handles.itr, handles.bam_record)) >= 0) {
 
 
-		// commented out by dorukb
+		// modified out by dorukb
 		// skip ambiguously mapped reads
-		//std::cout << "loading a sequence... " << std::endl;
+		// Quality threshold reduced to 1 from 20 just to test all suggested reads. 
 		if(handles.bam_record->core.qual < 1) {
 			continue;
 		}
 
 		records.emplace_back(handles.bam_record);
 
-		//added by dorukb
-		//m_sequence_records_info.emplace_back(handles.bam_record, m_bamHdr);
 	}
 
 	// cleanup
@@ -1272,7 +885,6 @@ std::vector<EventAlignmentRecord> AlignmentDB::_load_events_by_region_from_bam(c
 
 std::vector<EventAlignmentRecord> AlignmentDB::_load_events_by_region_from_read(const std::vector<SequenceAlignmentRecord>& sequence_records)
 {
-	//std::cout << "loading events by region from READ" << std::endl;
 	std::vector<EventAlignmentRecord> records;
 	for(size_t i = 0; i < sequence_records.size(); ++i) {
 		const SequenceAlignmentRecord& seq_record = sequence_records[i];
@@ -1302,7 +914,6 @@ std::vector<EventAlignmentRecord> AlignmentDB::_load_events_by_region_from_read(
 
 std::vector<EventAlignmentRecord> AlignmentDB::_load_events_by_region_from_select_reads(const std::vector<SequenceAlignmentRecord>& sequence_records, const std::vector<std::string>& candidate_readnames )
 {
-	//std::cout << "loading events by region from SELECT READS" << std::endl;
 	std::vector<EventAlignmentRecord> records;
 	for(size_t i = 0; i < sequence_records.size(); ++i) {
 
@@ -1370,14 +981,11 @@ void AlignmentDB::_debug_print_alignments()
 void AlignmentDB::_load_squiggle_read(const std::string& read_name)
 {
 	// Do we need to load this fast5 file?
-	//std::cout << "loading the squiggle?" << std::endl;
 	if(m_squiggle_read_map.find(read_name) == m_squiggle_read_map.end()) {
 
 		SquiggleRead* sr = new SquiggleRead(read_name, m_read_db);
-		//std::cout << "Squiggle loaded." << std::endl;
 		m_squiggle_read_map[read_name] = sr;
 	}
-	//std::cout << "done." << std::endl;
 } 
 
 std::vector<EventAlignment> AlignmentDB::_build_event_alignment(const EventAlignmentRecord& event_record) const
@@ -1413,22 +1021,17 @@ std::vector<EventAlignment> AlignmentDB::_build_event_alignment(const EventAlign
 	return alignment;
 }
 
+//added by dorukb
 bool AlignmentDB::_find_read_pos_from_ref_pos(const std::vector<AlignedPair>& pairs,
 									  int ref_pos,
 									  int& read_pos)
 {
 	AlignedPairRefLBComp lb_comp;
-	//AlignedPairRefUBComp ub_comp;
 
 	auto start_iter = std::lower_bound(pairs.begin(), pairs.end(),
 								  ref_pos, lb_comp);
 
-	// auto stop_iter = std::upper_bound(pairs.begin(), pairs.end(),
-	// 							 ref_pos, ub_comp);
-
-
 	
-
 	if (start_iter == pairs.end())
 	{
 		return false;
@@ -1438,18 +1041,16 @@ bool AlignmentDB::_find_read_pos_from_ref_pos(const std::vector<AlignedPair>& pa
 	
 }
 
+
+//added by dorukb
 bool AlignmentDB::_find_ref_pos_from_read_pos(const std::vector<AlignedPair>& pairs,
 									  int read_pos,
 									  int& ref_pos)
 {
 	AlignedPairReadLBComp lb_comp;
-	//AlignedPairReadUBComp ub_comp;
 
 	auto start_iter = std::lower_bound(pairs.begin(), pairs.end(),
 								  read_pos, lb_comp);
-
-	// auto stop_iter = std::upper_bound(pairs.begin(), pairs.end(),
-	// 							 read_pos, ub_comp);
 
 
 	if (start_iter == pairs.end())
@@ -1462,8 +1063,6 @@ bool AlignmentDB::_find_ref_pos_from_read_pos(const std::vector<AlignedPair>& pa
 	return true;
 	
 }
-
-
 
 
 bool AlignmentDB::_find_iter_by_ref_bounds(const std::vector<AlignedPair>& pairs,
@@ -1513,4 +1112,3 @@ bool AlignmentDB::_find_by_ref_bounds(const std::vector<AlignedPair>& pairs,
 		return false;
 	}
 }
-  
